@@ -1,0 +1,195 @@
+local PLAYER = game.Players.LocalPlayer
+local CHARACTER = PLAYER.Character
+local GUI = loadstring(game:HttpGet("https://pastebin.com/raw/2FSmfR4W"))()
+local UI = GUI:CreateWindow([[<font color="rgb(255,255,0)">Michael's</font> <font color="rgb(255,0,0)">Zombies</font>]],"discord.gg/MHAwHrnK4R")
+
+--// /
+
+local Home = UI:addPage("Main",1,true,2)
+local Esp = UI:addPage("ESP", 1, true, 6)
+local Teleports = UI:addPage("Teleports", 1, true, 7)
+local GunMods = UI:addPage("Gun Mods", 1, true, 8)
+local Misc = UI:addPage("Misc", 1, true, 9)
+
+--//
+
+local KillAura = Home:addToggle("Kill Aura", function(value)
+	getgenv().Ks = value
+	while Ks == true do
+		wait()
+		spawn(function()
+			local localPlayer = game:GetService("Players").LocalPlayer
+
+			local function booga()
+				local closestPlayer = nil
+				local shortestDistance = math.huge
+				for i, v in pairs(workspace.Ignore.Zombies:GetChildren()) do
+					if v:FindFirstChild("Humanoid") and v.Humanoid.Health ~= 0  and v:FindFirstChild("Head") then
+						local magnitude = (v.Head.Position - localPlayer.Character.Head.Position).magnitude
+
+						if magnitude < shortestDistance then
+							closestPlayer = v
+							shortestDistance = magnitude
+						end
+					end
+				end
+
+				return closestPlayer
+			end
+
+			local args = {
+				[1] = booga().Humanoid
+			}
+
+			game:GetService("ReplicatedStorage").Framework.Remotes.KnifeHitbox:FireServer(unpack(args))
+		end)
+	end
+end)
+
+local Noclip = Home:addToggle("Noclip", function(value)
+	local noclip = false
+	game:GetService('RunService').Stepped:Connect(function()
+		for i,v in pairs(CHARACTER:GetDescendants()) do
+			if v:IsA("BasePart") or v:IsA("MeshPart") then
+				v.CanCollide = false
+			end
+		end
+	end)
+end)
+
+
+local WalkSpeed = Home:addTextBox("WalkSpeed", "Insert Speed", function(value)
+	while wait() do
+		CHARACTER.Humanoid.WalkSpeed = value
+	end
+end)
+
+
+local PartsESP = Esp:addToggle("Show Parts", function(value)
+	local Parts = workspace["_Parts"]
+	local BillboardGui = Instance.new("BillboardGui")
+	BillboardGui.AlwaysOnTop = true
+	BillboardGui.Size = UDim2.new(40, 40, 1,1)
+	BillboardGui.StudsOffset = Vector3.new(0,3,0)
+	local Text = Instance.new("TextBox")
+	Text.BackgroundTransparency = 1
+	Text.Size = UDim2.new(1,1,1,1)
+	Text.SelectionStart = -1
+	Text.ShowNativeInput = true
+	Text.Font = Enum.Font.GothamMedium
+	Text.TextStrokeTransparency = 0
+	Text.TextColor3 = Color3.fromRGB(255,255,255)
+	Text.TextScaled = true
+	Text.Parent = BillboardGui
+	if value == true then
+		for i, part in pairs(Parts:GetDescendants()) do
+			if part:IsA("Model") then
+				for i, v in pairs(part:GetDescendants()) do
+					if v:IsA("BasePart") then
+						if v.Name == "PartPickup" then
+							BillboardGui:Clone().Parent = v
+							Text.Text = v.Parent.Name
+						end
+					end
+				end
+			end
+		end
+	else
+		for i, part in pairs(Parts:GetDescendants()) do
+			if part:IsA("Model") then
+				part.PartPickup.BillboardGui:Destroy()
+			end
+		end
+	end
+end)
+
+local ZombiesESP = Esp:addToggle("Show Zombies", function(value)
+	local Zombies = workspace.Ignore.Zombies
+	local BillboardGui = Instance.new("BillboardGui")
+	BillboardGui.AlwaysOnTop = true
+	BillboardGui.Size = UDim2.new(5,0,8,0)
+	local Image = Instance.new("ImageLabel")
+	Image.Image = "rbxassetid://10553131782"
+	Image.Size = UDim2.new(1,0,1,0)
+	Image.BackgroundTransparency = 1
+	Image.Parent = BillboardGui
+	game:GetService("Workspace").Ignore.Zombies.ChildAdded:Connect(function(v)
+		if value == true then
+			BillboardGui:Clone().Parent = v:WaitForChild("HumanoidRootPart")
+		else
+			wait(0.01)
+			v:WaitForChild("HumanoidRootPart").BillboardGui:Destroy()
+		end
+	end)
+end)
+
+local BoxESP = Esp:addToggle("Box ESP", function(value)
+    local BillboardGui = Instance.new("BillboardGui")
+	BillboardGui.AlwaysOnTop = true
+	BillboardGui.Size = UDim2.new(40, 40, 1,1)
+	BillboardGui.StudsOffset = Vector3.new(0,3,0)
+	local Text = Instance.new("TextBox")
+	Text.BackgroundTransparency = 1
+	Text.Size = UDim2.new(1,1,1,1)
+    Text.RichText = true
+	Text.SelectionStart = -1
+    Text.Text = [[<font color="rgb(255,0,0)">BOX</font>]]
+	Text.ShowNativeInput = true
+	Text.Font = Enum.Font.GothamMedium
+	Text.TextStrokeTransparency = 0
+	Text.TextColor3 = Color3.fromRGB(255,255,255)
+	Text.TextScaled = true
+	Text.Parent = BillboardGui
+    local MapComponents = workspace["_MapComponents"]
+    if value == true then
+        BillboardGui.Parent =  MapComponents.MysteryBox.PurchaseBox
+    else
+        MapComponents.MysteryBox.PurchaseBox.BillboardGui:Destroy()
+    end
+    MapComponents.ChildAdded:Connect(function(new)
+        if new.Name == "MysteryBox" then
+            BillboardGui.Parent = new.PurchaseBox
+        end
+    end)
+end)
+
+local TPBox = Teleports:addButton("Box", function(value)
+	CHARACTER.HumanoidRootPart.CFrame = CFrame.new(workspace["_MapComponents"].MysteryBox.PurchaseBox.Position)
+end)
+
+local Powers = Teleports:addToggle("Auto-Pickup Powerups", function(value)
+	workspace.Ignore["_Powerups"].ChildAdded:Connect(function(v)
+		while wait() do
+			if value == true then
+				v.CFrame = CFrame.new(CHARACTER.HumanoidRootPart.Position)
+			else
+				break
+			end
+		end
+	end)
+end)
+
+local InfAmmo = GunMods:addButton("Infinite Ammo", function()
+	while wait() do
+		CHARACTER.CharStats.GunInventory.Gun1.Storage.Value = 999999
+		CHARACTER.CharStats.GunInventory.Gun2.Storage.Value = 999999
+	end
+end)
+
+local NoReload = GunMods:addButton("No Reload", function(v)
+	while wait() do
+		CHARACTER.Remotes.Reload:FireServer(PLAYER)
+	end
+end)
+
+local NoReloadWarn = GunMods:addLabel("(DON'T RELOAD WHILE 'No Reload' IS ACTIVE!)")
+
+local InvisArms = Misc:addToggle("Invisible Arms", function(value)
+	if value == true then
+		workspace.Ignore.Camera.ArmRig["Left Arm"].Transparency = 1
+		workspace.Ignore.Camera.ArmRig["Right Arm"].Transparency = 1
+	else
+		workspace.Ignore.Camera.ArmRig["Left Arm"].Transparency = 0
+		workspace.Ignore.Camera.ArmRig["Right Arm"].Transparency = 0
+	end
+end)
