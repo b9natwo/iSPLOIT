@@ -1,3 +1,4 @@
+-- don't judge :rage:
 local function DestroyYep()
     for x = 1,69 do 
         if game.CoreGui:FindFirstChild("fu8rj82n") then game.CoreGui:FindFirstChild("fu8rj82n"):Destroy() end
@@ -7,6 +8,9 @@ end
 DestroyYep()
 
 wait(0.069)
+
+local Names = {"-=-=-=-=", "01101001", "Syrup", "Percs", "RobloxFax", "ScreenGui", "MoneyMaker", "GameUI", "flip#0001"}
+local Pick = Names[math.random(1, #Names)]
 
 local Library = {}
 
@@ -27,7 +31,7 @@ function Library:CreateWindow(windowname,windowinfo)
     local YepTitle = Instance.new("TextLabel")
     local YepCorner = Instance.new("UICorner")
 
-    fu8rj82n.Name = "fu8rj82n"
+    fu8rj82n.Name = Pick
     fu8rj82n.Parent = game.CoreGui
     fu8rj82n.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     fu8rj82n.ResetOnSpawn = false
@@ -207,6 +211,52 @@ function Library:CreateWindow(windowname,windowinfo)
 
 
     local PageYep = {}
+
+    function Library:addNotification(Title, Description, Time)
+        local Notification = Instance.new("Frame")
+        Notification.Name = "Notification_"..Title
+        Notification.Parent = fu8rj82n
+        Notification.BackgroundColor3 = Color3.fromRGB(20,20,20)
+        Notification.Position = UDim2.new(1.5, 0, 0.892, 0)
+        Notification.Size = UDim2.new(0.213,0,0.091,0)
+        local NotiTitle = Instance.new("TextLabel")
+        NotiTitle.Name = Title
+        NotiTitle.Parent = Notification
+        NotiTitle.BackgroundTransparency = 1
+        NotiTitle.Size = UDim2.new(0.76, 0, 0.421, 0)
+        NotiTitle.Font = "GothamBold"
+        NotiTitle.Text = Title
+        NotiTitle.TextScaled = true
+        NotiTitle.TextColor3 = Color3.fromRGB(255,255,255)
+        NotiTitle.TextStrokeTransparency = 0
+        NotiTitle.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+        NotiTitle.RichText = true
+        NotiTitle.TextXAlignment = "Left"
+        NotiTitle.TextYAlignment = "Center"
+        local NotiDesc = Instance.new("TextLabel")
+        NotiDesc.Name = Description
+        NotiDesc.Parent = Notification
+        NotiDesc.BackgroundTransparency = 1
+        NotiDesc.Size = UDim2.new(1, 0, 0.579, 0)
+        NotiDesc.Position = UDim2.new(0,0,0.421,0)
+        NotiDesc.Font = "GothamMedium"
+        NotiDesc.Text = Description
+        NotiDesc.TextSize = 15
+        NotiDesc.TextColor3 = Color3.fromRGB(255,255,255)
+        NotiDesc.TextStrokeTransparency = 0
+        NotiDesc.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+        NotiDesc.RichText = true
+        NotiDesc.TextXAlignment = "Left"
+        NotiDesc.TextYAlignment = "Top"
+        local TextConstraint = Instance.new("UITextSizeConstraint") 
+        TextConstraint.MaxTextSize = 15
+        TextConstraint.MinTextSize = 1
+        TextConstraint.Parent = NotiDesc
+        wait(1)
+        Notification:TweenPosition(UDim2.new(0.787, 0, 0.892, 0), "Out", "Quint", 1)
+        wait(Time)
+        Notification:TweenPosition(UDim2.new(1.5, 0, 0.892, 0), "Out", "Quint", 1)
+    end
 
     function PageYep:addPage(pagename,scrollsize,visible,elementspacing)
         local Tab = Instance.new("TextButton")
