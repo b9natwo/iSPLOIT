@@ -219,6 +219,7 @@ function Library:CreateWindow(windowname,windowinfo)
         Notification.BackgroundColor3 = Color3.fromRGB(20,20,20)
         Notification.Position = UDim2.new(1.5, 0, 0.892, 0)
         Notification.Size = UDim2.new(0.213,0,0.091,0)
+        UICorner.Parent = Notification
         local NotiTitle = Instance.new("TextLabel")
         NotiTitle.Name = Title
         NotiTitle.Parent = Notification
