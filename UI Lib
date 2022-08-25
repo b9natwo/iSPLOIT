@@ -213,13 +213,15 @@ function Library:CreateWindow(windowname,windowinfo)
     local PageYep = {}
 
     function Library:addNotification(Title, Description, Time)
+        local NotiCorner = Instance.new("UICorner")
+        NotiCorner.CornerRadius = UDim.new(0,8)
         local Notification = Instance.new("Frame")
         Notification.Name = "Notification_"..Title
         Notification.Parent = fu8rj82n
         Notification.BackgroundColor3 = Color3.fromRGB(20,20,20)
         Notification.Position = UDim2.new(1.5, 0, 0.892, 0)
         Notification.Size = UDim2.new(0.213,0,0.091,0)
-        UICorner.Parent = Notification
+        NotiCorner.Parent = Notification
         local NotiTitle = Instance.new("TextLabel")
         NotiTitle.Name = Title
         NotiTitle.Parent = Notification
