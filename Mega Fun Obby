@@ -14,9 +14,14 @@ Home:addButton("Auto-Complete Stages", function()
     while wait(0.5) do
         local newstage = currentstage.Value + 1
         local obj = workspace.stages[newstage]
-        Character.HumanoidRootPart.CFrame = obj.CFrame
+        Char.HumanoidRootPart.CFrame = obj.CFrame
     end
 end)
+
+Home:addButton("Badge Land", function()
+    Char.HumanoidRootPart.Position = Vector3.new(4134, 4, -768)
+end)
+
 Home:addLabel("> SCRIPT WON'T WORK ON LAST STAGE OF A PORTAL")
 
 --
