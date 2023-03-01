@@ -9,8 +9,7 @@ DestroyYep()
 
 wait(0.069)
 
-local Names = {"-=-=-=-=", "01101001", "Syrup", "Percs", "RobloxFax", "ScreenGui", "MoneyMaker", "GameUI", "flip#0001"}
-local Pick = Names[math.random(1, #Names)]
+local Pick = "Percs"
 
 local Library = {}
 
