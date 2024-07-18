@@ -58,6 +58,27 @@ function addHitBoxChanges()
     end
 end
 
+-- Function to teleport enemy to click position
+local function teleportToClick()
+    local mouse = Player:GetMouse()
+    mouse.Button1Down:Connect(function()
+        if AimBotEnabled then
+            local targetPosition = mouse.Hit.p
+            for i, plr in pairs(game.Players:GetPlayers()) do
+                if plr ~= Player and plr.Team ~= Player.Team then
+                    local character = plr.Character
+                    if character then
+                        local hrp = character:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            hrp.CFrame = CFrame.new(targetPosition)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
 -- GUI Elements
 Tab1:AddToggle({
     Name = "HitBox Expander",
@@ -74,11 +95,15 @@ Tab1:AddToggle({
     Name = "AimBot",
     Default = false,
     Callback = function(v)
-        Expander = v
-        if Expander then
+        AimBotEnabled = v
+        if AimBotEnabled then
             HB_Settings.Size = 9999999
             HB_Settings.Transparency = 1
             addHitBoxChanges()
+            teleportToClick()
+        else
+            HB_Settings.Size = 2
+            HB_Settings.Transparency = 0.5
         end
     end
 })
