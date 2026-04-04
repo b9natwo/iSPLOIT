@@ -1,39 +1,3 @@
---[[
-    iSPLOIT UI Library  v1.2
-    A sleek, RGB-themed Roblox GUI framework
-
-    FIXES in v1.2:
-      • Multi-tab support fixed — each tab now owns its own sidebar item list,
-        so sections/toggles/buttons on tab 2+ correctly appear and activate.
-      • allSide is now per-tab (tab._sideItems) instead of a shared global list,
-        preventing cross-tab sidebar interference.
-      • First-section activation is now scoped per tab.
-      • Tab switching correctly hides/shows both the page AND the sidebar group.
-      • Duplicate key in C palette (BORDER defined twice) removed.
-
-    USAGE:
-        local Library = loadstring(game:HttpGet("YOUR_RAW_URL"))()
-
-        local Window   = Library:CreateWindow({ Title = "iSPLOIT", Size = UDim2.fromOffset(560, 420) })
-        local Tab      = Window:CreateTab("Main")
-        local Tab2     = Window:CreateTab("Visual")
-        local Section  = Tab:CreateSection("General")
-        local Section2 = Tab2:CreateSection("ESP")
-
-        Section:CreateToggle({      Name="Fly",    Default=false,                   Callback=function(v) end })
-        Section:CreateSlider({      Name="Speed",  Min=0, Max=500, Default=16,      Callback=function(v) end })
-        Section:CreateDropdown({    Name="Mode",   Options={"A","B"}, Default="A",  Callback=function(v) end })
-        Section:CreateButton({      Name="Execute",Style="Default",                 Callback=function()  end })
-        Section:CreateInput({       Name="Player", Placeholder="name...",           Callback=function(v) end })
-        Section:CreateKeybind({     Name="Toggle", Default=Enum.KeyCode.RightShift, Callback=function(k) end })
-        Section:CreateColorPicker({ Name="Color",  Default=Color3.fromRGB(255,0,0), Callback=function(c) end })
-        Section:CreateLabel("Hello world")
-        Section:CreateDivider()
-
-        Window:BindToggleKey(Enum.KeyCode.RightShift)
-        Window:Notify("iSPLOIT", "Loaded!", 3)
---]]
-
 local Library = {}
 Library.__index = Library
 
