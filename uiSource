@@ -731,10 +731,6 @@ function Library:CreateWindow(cfg)
             New("TextLabel", { Position=UDim2.fromOffset(14,0), Size=UDim2.new(1,-14,1,0), BackgroundTransparency=1, Text=string.upper(secName), Font=Enum.Font.GothamBold, TextSize=10, TextColor3=C.T_HINT, TextXAlignment=Enum.TextXAlignment.Left, ZIndex=14, Parent=hdr })
             New("Frame", { Size=UDim2.new(1,0,0,1), BackgroundColor3=C.DIVIDER, BorderSizePixel=0, ZIndex=13, Parent=card })
 
-            -- ── FIX: register sidebar item into THIS TAB'S list ───────────────
-            -- Previously we pushed into a shared allSide table.
-            -- Now we push into tabEntry.sideItems so the deactivate loop
-            -- only touches siblings in the same tab.
             table.insert(tabEntry.sideItems, { lbl = siLbl, bar = siBar })
 
             -- ── FIX: first-section check is scoped to this tab ────────────────
@@ -1033,8 +1029,30 @@ function Library:CreateWindow(cfg)
             end
 
             -- ── LABEL ────────────────────────────────────────────────────────
-            function Section:CreateLabel(txt)
-                New("TextLabel", { Size=UDim2.new(1,0,0,18), BackgroundTransparency=1, Text=txt, Font=Enum.Font.Gotham, TextSize=12, TextColor3=C.T_HINT, TextXAlignment=Enum.TextXAlignment.Left, TextWrapped=true, ZIndex=14, Parent=card })
+            function Section:CreateLabel(cfg)
+                -- Handle both
+                if type(cfg) == "string" then cfg = { Text = cfg } end
+                
+                local text = cfg.Text or "Label"
+                
+                local label = New("TextLabel", {
+                    Size = UDim2.new(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundTransparency = 1,
+                    Text = text,
+                    Font = Enum.Font.Gotham,
+                    TextSize = 13,
+                    TextColor3 = C.T_SEC,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextWrapped = true,
+                    ZIndex = 15,
+                    Parent = card -- 'card' is the section container in your library
+                })
+                local LabelObj = {}
+                function LabelObj:SetText(newText)
+                    label.Text = tostring(newText)
+                end
+                return LabelObj
             end
 
             -- ── DIVIDER ──────────────────────────────────────────────────────
