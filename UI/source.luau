@@ -6,24 +6,26 @@ local Players = game:GetService("Players")
 local ModMenu = {}
 ModMenu.__index = ModMenu
 
--- GTA-inspired palette: deep charcoal, soft highlight, restrained accent
+-- GTA V interaction-menu look:
+-- black translucent rows, white selected row with dark text,
+-- one muted accent colour used only on the header, slider fill and scrollbar.
 local DEFAULT_THEME = {
-	Background   = Color3.fromRGB(8, 10, 12),
-	Panel        = Color3.fromRGB(12, 14, 16),
-	Row          = Color3.fromRGB(0, 0, 0),
-	RowHover     = Color3.fromRGB(28, 32, 36),
-	RowSelected  = Color3.fromRGB(255, 255, 255),
-	Accent       = Color3.fromRGB(255, 255, 255),
-	AccentDim    = Color3.fromRGB(180, 185, 190),
-	Text         = Color3.fromRGB(230, 232, 235),
-	Muted        = Color3.fromRGB(160, 165, 170),
-	Value        = Color3.fromRGB(200, 205, 210),
-	Border       = Color3.fromRGB(40, 45, 50),
-	Disabled     = Color3.fromRGB(90, 95, 100),
-	Danger       = Color3.fromRGB(220, 70, 60),
-	Success      = Color3.fromRGB(90, 200, 100),
+	Accent       = Color3.fromRGB(88, 140, 196),  -- header / slider fill / scrollbar
+	Panel        = Color3.fromRGB(0, 0, 0),       -- list + footer + sub bar background
+	Highlight    = Color3.fromRGB(255, 255, 255), -- selected row
+	SelectedText = Color3.fromRGB(12, 12, 12),    -- text on selected row
+	Text         = Color3.fromRGB(235, 235, 235),
+	Muted        = Color3.fromRGB(150, 155, 160),
+	Disabled     = Color3.fromRGB(85, 88, 92),
 	Overlay      = Color3.fromRGB(0, 0, 0),
 }
+
+local PANEL_TRANSPARENCY = 0.4
+local HEADER_HEIGHT = 66
+local SUBBAR_HEIGHT = 28
+local FOOTER_HEIGHT = 56
+local ROW_HEIGHT = 32
+local SEPARATOR_HEIGHT = 24
 
 local function create(className, properties, parent)
 	local object = Instance.new(className)
@@ -32,19 +34,6 @@ local function create(className, properties, parent)
 	end
 	object.Parent = parent
 	return object
-end
-
-local function corner(parent, radius)
-	return create("UICorner", { CornerRadius = UDim.new(0, radius or 0) }, parent)
-end
-
-local function stroke(parent, color, thickness, transparency)
-	return create("UIStroke", {
-		Color = color,
-		Thickness = thickness or 1,
-		Transparency = transparency or 0,
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-	}, parent)
 end
 
 local function label(parent, text, size, color, font)
@@ -72,6 +61,10 @@ local function tween(instance, props, duration, style, direction)
 	return t
 end
 
+local function darken(color, amount)
+	return Color3.new(color.R * (1 - amount), color.G * (1 - amount), color.B * (1 - amount))
+end
+
 function ModMenu.new(config)
 	config = config or {}
 	local self = setmetatable({}, ModMenu)
@@ -95,7 +88,9 @@ function ModMenu.new(config)
 	self._lastToggle = 0
 	self._toggleDebounce = config.ToggleDebounce or 0.25
 	self._rowButtons = {}
+	self._rowOffsets = {}
 	self._hoverConnections = {}
+	self._dim = config.Dim or 1 -- background transparency of the full-screen dim (1 = none)
 
 	local player = Players.LocalPlayer
 	assert(player, "ModMenu.new() must be called from a LocalScript")
@@ -110,7 +105,6 @@ function ModMenu.new(config)
 		Enabled = true,
 	}, playerGui)
 
-	-- Full-screen dim (very light so the world stays readable)
 	self.Overlay = create("Frame", {
 		Name = "Overlay",
 		BackgroundColor3 = self.Theme.Overlay,
@@ -120,68 +114,81 @@ function ModMenu.new(config)
 		BorderSizePixel = 0,
 	}, self.Gui)
 
-	-- Main panel – compact, left-anchored like classic GTA interaction menu
-	local defaultSize = config.Size or UDim2.fromOffset(340, 380)
+	-- Main container (transparent; each section draws its own background)
+	self._basePosition = config.Position or UDim2.new(0, 40, 0.5, 0)
 	self.Main = create("Frame", {
 		Name = "Main",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = config.Position or UDim2.new(0, 40, 0.5, 0),
-		Size = defaultSize,
-		BackgroundColor3 = self.Theme.Background,
-		BackgroundTransparency = 0.22,
+		Position = self._basePosition,
+		Size = config.Size or UDim2.fromOffset(330, 440),
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
 		ClipsDescendants = true,
 	}, self.Overlay)
-	corner(self.Main, 2)
 
-	-- Subtle outer stroke
-	stroke(self.Main, Color3.fromRGB(255, 255, 255), 1, 0.88)
+	-- Header banner
+	self.Header = create("Frame", {
+		Name = "Header",
+		Size = UDim2.new(1, 0, 0, HEADER_HEIGHT),
+		BackgroundColor3 = self.Theme.Accent,
+		BorderSizePixel = 0,
+	}, self.Main)
+	create("UIGradient", {
+		Color = ColorSequence.new(self.Theme.Accent, darken(self.Theme.Accent, 0.55)),
+		Rotation = 90,
+	}, self.Header)
 
-	-- Header
-	self.TopBar = create("Frame", {
-		Name = "TopBar",
-		Size = UDim2.new(1, 0, 0, 48),
+	self.TitleLabel = label(self.Header, self.Title, 24, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBlack)
+	self.TitleLabel.Name = "Title"
+	self.TitleLabel.Position = UDim2.fromOffset(16, 0)
+	self.TitleLabel.Size = UDim2.new(1, -32, 1, self.Subtitle ~= "" and -16 or 0)
+	self.TitleLabel.TextXAlignment = Enum.TextXAlignment.Center
+	self.TitleLabel.TextTransparency = 0
+
+	self.SubtitleLabel = label(self.Header, string.upper(self.Subtitle), 10,
+		Color3.fromRGB(215, 225, 235), Enum.Font.GothamMedium)
+	self.SubtitleLabel.Name = "Subtitle"
+	self.SubtitleLabel.AnchorPoint = Vector2.new(0, 1)
+	self.SubtitleLabel.Position = UDim2.new(0, 16, 1, -6)
+	self.SubtitleLabel.Size = UDim2.new(1, -32, 0, 14)
+	self.SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Center
+	self.SubtitleLabel.Visible = self.Subtitle ~= ""
+
+	-- Category bar (category name + page)
+	self.SubBar = create("Frame", {
+		Name = "SubBar",
+		Position = UDim2.fromOffset(0, HEADER_HEIGHT),
+		Size = UDim2.new(1, 0, 0, SUBBAR_HEIGHT),
 		BackgroundColor3 = self.Theme.Panel,
-		BackgroundTransparency = 0.35,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 	}, self.Main)
 
-	create("Frame", {
-		Name = "TopLine",
-		Size = UDim2.new(1, 0, 0, 1),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		BackgroundTransparency = 0.75,
-		BorderSizePixel = 0,
-	}, self.TopBar)
+	self.CategoryLabel = label(self.SubBar, "", 12, self.Theme.Text, Enum.Font.GothamBold)
+	self.CategoryLabel.Name = "Category"
+	self.CategoryLabel.Position = UDim2.fromOffset(14, 0)
+	self.CategoryLabel.Size = UDim2.new(1, -90, 1, 0)
 
-	self.TitleLabel = label(self.TopBar, self.Title, 13, self.Theme.Text, Enum.Font.GothamBold)
-	self.TitleLabel.Name = "Title"
-	self.TitleLabel.Position = UDim2.fromOffset(14, 6)
-	self.TitleLabel.Size = UDim2.new(1, -80, 0, 18)
-
-	self.PageLabel = label(self.TopBar, "1 / 1", 11, self.Theme.Muted, Enum.Font.GothamMedium)
+	self.PageLabel = label(self.SubBar, "1 / 1", 11, self.Theme.Muted, Enum.Font.GothamMedium)
 	self.PageLabel.Name = "Page"
 	self.PageLabel.AnchorPoint = Vector2.new(1, 0)
-	self.PageLabel.Position = UDim2.new(1, -14, 0, 6)
-	self.PageLabel.Size = UDim2.fromOffset(60, 18)
+	self.PageLabel.Position = UDim2.new(1, -14, 0, 0)
+	self.PageLabel.Size = UDim2.fromOffset(60, SUBBAR_HEIGHT)
 	self.PageLabel.TextXAlignment = Enum.TextXAlignment.Right
 
-	self.CategoryLabel = label(self.TopBar, "", 11, self.Theme.AccentDim, Enum.Font.Gotham)
-	self.CategoryLabel.Name = "Category"
-	self.CategoryLabel.Position = UDim2.fromOffset(14, 26)
-	self.CategoryLabel.Size = UDim2.new(1, -28, 0, 16)
-
 	-- Option list
+	local listTop = HEADER_HEIGHT + SUBBAR_HEIGHT
 	self.OptionList = create("ScrollingFrame", {
 		Name = "OptionList",
-		Position = UDim2.fromOffset(0, 48),
-		Size = UDim2.new(1, 0, 1, -96),
-		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, listTop),
+		Size = UDim2.new(1, 0, 1, -(listTop + FOOTER_HEIGHT)),
+		BackgroundColor3 = self.Theme.Panel,
+		BackgroundTransparency = PANEL_TRANSPARENCY,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 2,
-		ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255),
-		ScrollBarImageTransparency = 0.6,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = self.Theme.Accent,
+		ScrollBarImageTransparency = 0,
 		CanvasSize = UDim2.fromOffset(0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -191,28 +198,27 @@ function ModMenu.new(config)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, self.OptionList)
 
-	-- Description footer
+	-- Footer: description + item counter
 	self.DescriptionBar = create("Frame", {
 		Name = "DescriptionBar",
-		Position = UDim2.new(0, 0, 1, -48),
-		Size = UDim2.new(1, 0, 0, 48),
+		Position = UDim2.new(0, 0, 1, -FOOTER_HEIGHT),
+		Size = UDim2.new(1, 0, 0, FOOTER_HEIGHT),
 		BackgroundColor3 = self.Theme.Panel,
-		BackgroundTransparency = 0.35,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 	}, self.Main)
 
-	create("Frame", {
-		Name = "FooterLine",
-		Size = UDim2.new(1, 0, 0, 1),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		BackgroundTransparency = 0.8,
-		BorderSizePixel = 0,
-	}, self.DescriptionBar)
+	self.CounterLabel = label(self.DescriptionBar, "", 11, self.Theme.Muted, Enum.Font.GothamMedium)
+	self.CounterLabel.Name = "Counter"
+	self.CounterLabel.AnchorPoint = Vector2.new(1, 0)
+	self.CounterLabel.Position = UDim2.new(1, -14, 0, 6)
+	self.CounterLabel.Size = UDim2.fromOffset(60, 14)
+	self.CounterLabel.TextXAlignment = Enum.TextXAlignment.Right
 
 	self.Description = label(self.DescriptionBar, "Select an option.", 12,
-		self.Theme.Muted, Enum.Font.Gotham)
-	self.Description.Position = UDim2.fromOffset(14, 4)
-	self.Description.Size = UDim2.new(1, -28, 1, -8)
+		self.Theme.Text, Enum.Font.Gotham)
+	self.Description.Position = UDim2.fromOffset(14, 6)
+	self.Description.Size = UDim2.new(1, -90, 1, -12)
 	self.Description.TextYAlignment = Enum.TextYAlignment.Top
 	self.Description.TextWrapped = true
 
@@ -291,10 +297,13 @@ function ModMenu:SetVisible(visible)
 	self.Main.Visible = self.Visible
 
 	if self.Visible then
+		-- quick slide-in from the left, like the game menu
 		self.Overlay.BackgroundTransparency = 1
-		self.Main.BackgroundTransparency = 0.35
-		tween(self.Overlay, { BackgroundTransparency = 0.55 }, 0.15)
-		tween(self.Main, { BackgroundTransparency = 0.18 }, 0.14)
+		self.Main.Position = self._basePosition - UDim2.fromOffset(24, 0)
+		if self._dim < 1 then
+			tween(self.Overlay, { BackgroundTransparency = self._dim }, 0.15)
+		end
+		tween(self.Main, { Position = self._basePosition }, 0.14)
 		self:_renderOptions()
 		self:_updateHeader()
 		self:_updateDescription()
@@ -386,7 +395,7 @@ function ModMenu:_bindHover(button, isSelected)
 	if isSelected then return end
 	local enter = button.MouseEnter:Connect(function()
 		if not self.Visible then return end
-		tween(button, { BackgroundTransparency = 0.82 }, 0.08)
+		tween(button, { BackgroundTransparency = 0.88 }, 0.08)
 	end)
 	local leave = button.MouseLeave:Connect(function()
 		if not self.Visible then return end
@@ -401,7 +410,25 @@ function ModMenu:_updateHeader()
 	local totalTabs = math.max(#self.Tabs, 1)
 	self.PageLabel.Text = string.format("%d / %d", self.ActiveTabIndex, totalTabs)
 	self.CategoryLabel.Text = tab and string.upper(tab.Name) or ""
+	self.CategoryLabel.TextColor3 = self.Theme.Text
 	self.TitleLabel.Text = self.Title
+end
+
+function ModMenu:_updateCounter()
+	local tab = self:_activeTab()
+	if not tab or #tab.Options == 0 then
+		self.CounterLabel.Text = ""
+		return
+	end
+	-- count only selectable rows so separators don't skew the number
+	local total, current = 0, 0
+	for index, option in ipairs(tab.Options) do
+		if option.Type ~= "Separator" then
+			total += 1
+			if index == self.ActiveOptionIndex then current = total end
+		end
+	end
+	self.CounterLabel.Text = string.format("%d / %d", current, total)
 end
 
 function ModMenu:_clearOptionRows()
@@ -409,11 +436,41 @@ function ModMenu:_clearOptionRows()
 		if child:IsA("GuiObject") then child:Destroy() end
 	end
 	self._rowButtons = {}
+	self._rowOffsets = {}
 	self:_clearHoverConnections()
+end
+
+-- Plain checkbox: outlined square, filled when on. No colour coding.
+function ModMenu:_buildCheckbox(row, isOn, color)
+	local box = create("Frame", {
+		Name = "Checkbox",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		Size = UDim2.fromOffset(16, 16),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+	}, row)
+	create("UIStroke", {
+		Color = color,
+		Thickness = 1.5,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	}, box)
+	if isOn then
+		create("Frame", {
+			Name = "Fill",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(8, 8),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+		}, box)
+	end
+	return box
 end
 
 function ModMenu:_renderOptions()
 	self:_clearOptionRows()
+	self:_updateCounter()
 	local tab = self:_activeTab()
 	if not tab then return end
 
@@ -426,74 +483,100 @@ function ModMenu:_renderOptions()
 
 	self.ActiveOptionIndex = math.clamp(self.ActiveOptionIndex, 1, #tab.Options)
 
+	local theme = self.Theme
+	local offsetY = 0
+
 	for index, option in ipairs(tab.Options) do
 		local selected = index == self.ActiveOptionIndex
+		self._rowOffsets[index] = offsetY
 
 		if option.Type == "Separator" then
 			local sep = create("Frame", {
 				Name = "Separator_" .. index,
 				LayoutOrder = index,
-				Size = UDim2.new(1, 0, 0, 22),
-				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, SEPARATOR_HEIGHT),
+				BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+				BackgroundTransparency = 0.45,
+				BorderSizePixel = 0,
 			}, self.OptionList)
-			local sepLabel = label(sep, string.upper(option.Name), 10, self.Theme.Muted, Enum.Font.GothamBold)
+			local sepLabel = label(sep, string.upper(option.Name), 10, theme.Muted, Enum.Font.GothamBold)
 			sepLabel.Position = UDim2.fromOffset(14, 0)
 			sepLabel.Size = UDim2.new(1, -28, 1, 0)
+			offsetY += SEPARATOR_HEIGHT
 		else
+			local disabled = option.Enabled == false
+
 			local row = create("TextButton", {
 				Name = "Option_" .. index,
 				LayoutOrder = index,
-				Size = UDim2.new(1, 0, 0, 32),
-				BackgroundColor3 = selected and self.Theme.RowSelected or Color3.fromRGB(255, 255, 255),
-				BackgroundTransparency = selected and 0.88 or 1,
+				Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
+				BackgroundColor3 = theme.Highlight,
+				BackgroundTransparency = selected and 0 or 1,
 				BorderSizePixel = 0,
 				AutoButtonColor = false,
 				Text = "",
 			}, self.OptionList)
 
-			if selected then
-				create("Frame", {
-					Name = "SelBar",
-					Size = UDim2.new(0, 3, 1, 0),
-					BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-					BackgroundTransparency = 0.15,
-					BorderSizePixel = 0,
-				}, row)
+			-- text colour: dark on the white selected row, light otherwise
+			local textColor = selected and theme.SelectedText or theme.Text
+			local valueColor = selected and theme.SelectedText or theme.Text
+			if disabled then
+				textColor = theme.Disabled
+				valueColor = theme.Disabled
 			end
 
-			local textColor = selected and Color3.fromRGB(255, 255, 255) or self.Theme.Text
-			if option.Enabled == false then
-				textColor = self.Theme.Disabled
+			local reserve = 14
+			if option.Type == "Toggle" then
+				reserve = 46
+			elseif option.Type == "List" then
+				reserve = 130
+			elseif option.Type == "Slider" then
+				reserve = 170
 			end
 
 			local nameLabel = label(row, option.Name, 13, textColor,
 				selected and Enum.Font.GothamMedium or Enum.Font.Gotham)
 			nameLabel.Position = UDim2.fromOffset(14, 0)
-			nameLabel.Size = UDim2.new(0.62, -14, 1, 0)
+			nameLabel.Size = UDim2.new(1, -(14 + reserve), 1, 0)
 
-			local valueText = ""
-			local valueColor = self.Theme.Value
 			if option.Type == "Toggle" then
-				valueText = option.Value and "●" or "○"
-				valueColor = option.Value and self.Theme.Success or self.Theme.Muted
+				self:_buildCheckbox(row, option.Value == true, valueColor)
+
 			elseif option.Type == "List" then
-				valueText = "< " .. tostring(option.Value or "—") .. " >"
+				local valueLabel = label(row, "<  " .. tostring(option.Value or "-") .. "  >", 12,
+					valueColor, Enum.Font.Gotham)
+				valueLabel.Name = "Value"
+				valueLabel.AnchorPoint = Vector2.new(1, 0)
+				valueLabel.Position = UDim2.new(1, -14, 0, 0)
+				valueLabel.Size = UDim2.fromOffset(120, ROW_HEIGHT)
+				valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+
 			elseif option.Type == "Slider" then
-				valueText = tostring(option.Value)
-			elseif option.Type == "Button" then
-				valueText = ""
-			end
+				local valueLabel = label(row, tostring(option.Value), 12, valueColor, Enum.Font.Gotham)
+				valueLabel.Name = "Value"
+				valueLabel.AnchorPoint = Vector2.new(1, 0)
+				valueLabel.Position = UDim2.new(1, -14, 0, 0)
+				valueLabel.Size = UDim2.fromOffset(44, ROW_HEIGHT)
+				valueLabel.TextXAlignment = Enum.TextXAlignment.Right
 
-			if option.Enabled == false then
-				valueColor = self.Theme.Disabled
+				local track = create("Frame", {
+					Name = "Track",
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -66, 0.5, 0),
+					Size = UDim2.fromOffset(70, 4),
+					BackgroundColor3 = selected and Color3.fromRGB(190, 190, 190) or Color3.fromRGB(70, 74, 78),
+					BorderSizePixel = 0,
+				}, row)
+				local range = option.Max - option.Min
+				local fraction = range > 0 and (option.Value - option.Min) / range or 0
+				create("Frame", {
+					Name = "Fill",
+					Size = UDim2.fromScale(math.clamp(fraction, 0, 1), 1),
+					BackgroundColor3 = disabled and theme.Disabled
+						or (selected and theme.SelectedText or theme.Accent),
+					BorderSizePixel = 0,
+				}, track)
 			end
-
-			local valueLabel = label(row, valueText, 12, valueColor, Enum.Font.Gotham)
-			valueLabel.Name = "Value"
-			valueLabel.AnchorPoint = Vector2.new(1, 0)
-			valueLabel.Position = UDim2.new(1, -14, 0, 0)
-			valueLabel.Size = UDim2.new(0.38, 0, 1, 0)
-			valueLabel.TextXAlignment = Enum.TextXAlignment.Right
 
 			row.Activated:Connect(function()
 				if option.Enabled == false then return end
@@ -505,18 +588,20 @@ function ModMenu:_renderOptions()
 
 			self:_bindHover(row, selected)
 			self._rowButtons[index] = row
+			offsetY += ROW_HEIGHT
 		end
 	end
 
-	local selectedRow = self._rowButtons[self.ActiveOptionIndex]
-	if selectedRow then
-		local relativeY = selectedRow.AbsolutePosition.Y - self.OptionList.AbsolutePosition.Y + self.OptionList.CanvasPosition.Y
+	-- keep the selected row in view (uses computed offsets, so it's layout-independent)
+	local rowTop = self._rowOffsets[self.ActiveOptionIndex]
+	if rowTop then
+		local rowHeight = (tab.Options[self.ActiveOptionIndex].Type == "Separator") and SEPARATOR_HEIGHT or ROW_HEIGHT
 		local viewTop = self.OptionList.CanvasPosition.Y
-		local viewBottom = viewTop + self.OptionList.AbsoluteWindowSize.Y
-		if relativeY < viewTop then
-			self.OptionList.CanvasPosition = Vector2.new(0, relativeY)
-		elseif relativeY + selectedRow.AbsoluteSize.Y > viewBottom then
-			self.OptionList.CanvasPosition = Vector2.new(0, relativeY + selectedRow.AbsoluteSize.Y - self.OptionList.AbsoluteWindowSize.Y)
+		local viewHeight = self.OptionList.AbsoluteWindowSize.Y
+		if rowTop < viewTop then
+			self.OptionList.CanvasPosition = Vector2.new(0, rowTop)
+		elseif rowTop + rowHeight > viewTop + viewHeight then
+			self.OptionList.CanvasPosition = Vector2.new(0, rowTop + rowHeight - viewHeight)
 		end
 	end
 end
@@ -546,6 +631,17 @@ function ModMenu:ChangeTab(direction)
 	if #self.Tabs == 0 then return end
 	self.ActiveTabIndex = ((self.ActiveTabIndex - 1 + direction) % #self.Tabs) + 1
 	self.ActiveOptionIndex = 1
+	self.OptionList.CanvasPosition = Vector2.new(0, 0)
+	-- land on the first selectable row
+	local tab = self:_activeTab()
+	if tab and tab.Options[1] and tab.Options[1].Type == "Separator" then
+		for i, opt in ipairs(tab.Options) do
+			if opt.Type ~= "Separator" then
+				self.ActiveOptionIndex = i
+				break
+			end
+		end
+	end
 	self:_renderOptions()
 	self:_updateHeader()
 	self:_updateDescription()
