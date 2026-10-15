@@ -6,9 +6,6 @@ local Players = game:GetService("Players")
 local ModMenu = {}
 ModMenu.__index = ModMenu
 
--- GTA V interaction-menu look:
--- black translucent rows, white selected row with dark text,
--- one muted accent colour used only on the header, slider fill and scrollbar.
 local DEFAULT_THEME = {
 	Accent       = Color3.fromRGB(88, 140, 196),  -- header / slider fill / scrollbar
 	Panel        = Color3.fromRGB(0, 0, 0),       -- list + footer + sub bar background
@@ -90,7 +87,7 @@ function ModMenu.new(config)
 	self._rowButtons = {}
 	self._rowOffsets = {}
 	self._hoverConnections = {}
-	self._dim = config.Dim or 1 -- background transparency of the full-screen dim (1 = none)
+	self._dim = config.Dim or 1
 
 	local player = Players.LocalPlayer
 	assert(player, "ModMenu.new() must be called from a LocalScript")
@@ -114,7 +111,6 @@ function ModMenu.new(config)
 		BorderSizePixel = 0,
 	}, self.Gui)
 
-	-- Main container (transparent; each section draws its own background)
 	self._basePosition = config.Position or UDim2.new(0, 40, 0.5, 0)
 	self.Main = create("Frame", {
 		Name = "Main",
@@ -127,7 +123,6 @@ function ModMenu.new(config)
 		ClipsDescendants = true,
 	}, self.Overlay)
 
-	-- Header banner
 	self.Header = create("Frame", {
 		Name = "Header",
 		Size = UDim2.new(1, 0, 0, HEADER_HEIGHT),
@@ -155,7 +150,6 @@ function ModMenu.new(config)
 	self.SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Center
 	self.SubtitleLabel.Visible = self.Subtitle ~= ""
 
-	-- Category bar (category name + page)
 	self.SubBar = create("Frame", {
 		Name = "SubBar",
 		Position = UDim2.fromOffset(0, HEADER_HEIGHT),
@@ -177,7 +171,6 @@ function ModMenu.new(config)
 	self.PageLabel.Size = UDim2.fromOffset(60, SUBBAR_HEIGHT)
 	self.PageLabel.TextXAlignment = Enum.TextXAlignment.Right
 
-	-- Option list
 	local listTop = HEADER_HEIGHT + SUBBAR_HEIGHT
 	self.OptionList = create("ScrollingFrame", {
 		Name = "OptionList",
@@ -198,7 +191,6 @@ function ModMenu.new(config)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, self.OptionList)
 
-	-- Footer: description + item counter
 	self.DescriptionBar = create("Frame", {
 		Name = "DescriptionBar",
 		Position = UDim2.new(0, 0, 1, -FOOTER_HEIGHT),
@@ -297,7 +289,6 @@ function ModMenu:SetVisible(visible)
 	self.Main.Visible = self.Visible
 
 	if self.Visible then
-		-- quick slide-in from the left, like the game menu
 		self.Overlay.BackgroundTransparency = 1
 		self.Main.Position = self._basePosition - UDim2.fromOffset(24, 0)
 		if self._dim < 1 then
@@ -420,7 +411,6 @@ function ModMenu:_updateCounter()
 		self.CounterLabel.Text = ""
 		return
 	end
-	-- count only selectable rows so separators don't skew the number
 	local total, current = 0, 0
 	for index, option in ipairs(tab.Options) do
 		if option.Type ~= "Separator" then
@@ -440,7 +430,6 @@ function ModMenu:_clearOptionRows()
 	self:_clearHoverConnections()
 end
 
--- Plain checkbox: outlined square, filled when on. No colour coding.
 function ModMenu:_buildCheckbox(row, isOn, color)
 	local box = create("Frame", {
 		Name = "Checkbox",
@@ -517,7 +506,6 @@ function ModMenu:_renderOptions()
 				Text = "",
 			}, self.OptionList)
 
-			-- text colour: dark on the white selected row, light otherwise
 			local textColor = selected and theme.SelectedText or theme.Text
 			local valueColor = selected and theme.SelectedText or theme.Text
 			if disabled then
@@ -592,7 +580,6 @@ function ModMenu:_renderOptions()
 		end
 	end
 
-	-- keep the selected row in view (uses computed offsets, so it's layout-independent)
 	local rowTop = self._rowOffsets[self.ActiveOptionIndex]
 	if rowTop then
 		local rowHeight = (tab.Options[self.ActiveOptionIndex].Type == "Separator") and SEPARATOR_HEIGHT or ROW_HEIGHT
@@ -632,7 +619,6 @@ function ModMenu:ChangeTab(direction)
 	self.ActiveTabIndex = ((self.ActiveTabIndex - 1 + direction) % #self.Tabs) + 1
 	self.ActiveOptionIndex = 1
 	self.OptionList.CanvasPosition = Vector2.new(0, 0)
-	-- land on the first selectable row
 	local tab = self:_activeTab()
 	if tab and tab.Options[1] and tab.Options[1].Type == "Separator" then
 		for i, opt in ipairs(tab.Options) do
