@@ -4,8 +4,8 @@ local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
-local iSPLOIT = {}
-iSPLOIT.__index = iSPLOIT
+local ModMenu = {}
+ModMenu.__index = ModMenu
 
 local DEFAULT_THEME = {
 	Accent       = Color3.fromRGB(88, 140, 196),  -- header / slider fill / scrollbar
@@ -95,23 +95,9 @@ local function createDefaultStorage(folder)
 		local isFolder = envFunction("isfolder")
 		local makeFolder = envFunction("makefolder")
 		local delFile = envFunction("delfile")
-
-		local function ensureFolder(path)
-			if not makeFolder then return end
-			local accumulated = ""
-			for segment in tostring(path):gmatch("[^/\\]+") do
-				accumulated = accumulated == "" and segment or (accumulated .. "/" .. segment)
-				local exists = false
-				if isFolder then
-					local ok, result = pcall(isFolder, accumulated)
-					if ok then exists = result == true end
-				end
-				if not exists then
-					pcall(makeFolder, accumulated)
-				end
-			end
-		end
-		ensureFolder(folder)
+		pcall(function()
+			if isFolder and makeFolder and not isFolder(folder) then makeFolder(folder) end
+		end)
 
 		local function pathFor(name)
 			return folder .. "/" .. sanitizeName(name) .. ".json"
@@ -182,9 +168,42 @@ local function optionKey(tab, index)
 	return count > 1 and (base .. "#" .. count) or base
 end
 
-function iSPLOIT.new(config)
+local function getRegistry()
+	local getGenv = envFunction("getgenv")
+	local holder = getGenv and getGenv() or _G
+	if type(holder) ~= "table" then holder = _G end
+	if type(holder.__ModMenuInstances) ~= "table" then
+		holder.__ModMenuInstances = {}
+	end
+	return holder.__ModMenuInstances
+end
+
+function ModMenu.new(config)
 	config = config or {}
-	local self = setmetatable({}, iSPLOIT)
+
+	local player = Players.LocalPlayer
+	assert(player, "ModMenu.new() must be called from a LocalScript")
+	local playerGui = player:WaitForChild("PlayerGui")
+
+	local guiName = config.GuiName or "GTAInteractionMenu"
+	local registry = getRegistry()
+	local previous = registry[guiName]
+	local carry = nil
+	if previous then
+		carry = {
+			Visible = previous.Visible,
+			Position = previous._position,
+			UserMoved = previous._userMoved,
+		}
+		pcall(function() previous:Destroy() end)
+		registry[guiName] = nil
+	end
+	local stale = playerGui:FindFirstChild(guiName)
+	if stale then stale:Destroy() end
+
+	local self = setmetatable({}, ModMenu)
+	self._guiName = guiName
+	registry[guiName] = self
 
 	self.Theme = {}
 	for key, value in pairs(DEFAULT_THEME) do
@@ -208,7 +227,7 @@ function iSPLOIT.new(config)
 	self._rowOffsets = {}
 	self._sliderHits = {}
 	self._hoverConnections = {}
-	self._dim = config.Dim or 1
+	self._dim = config.Dim or 1 
 
 	local touchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 	if config.TouchMode ~= nil then touchDevice = config.TouchMode == true end
@@ -228,36 +247,21 @@ function iSPLOIT.new(config)
 	self._dragging = false
 
 	self.ConfigName = config.ConfigName or "Slot 1"
-	self.ConfigFolder = config.ConfigFolder or "iSPLOIT/Configs"
+	self.ConfigFolder = config.ConfigFolder or "ModMenu"
 	self.Storage = config.Storage or createDefaultStorage(self.ConfigFolder)
 	self.AutoSave = config.AutoSave == true
 	self._autoSavePending = false
 	self._loaded = nil
 	self._notifyToken = 0
 
-	local player = Players.LocalPlayer
-	assert(player, "iSPLOIT.new() must be called from a LocalScript")
-
-	-- Prefer gethui() when the executor provides it
-	local guiParent
-	if type(gethui) == "function" then
-		local ok, hui = pcall(gethui)
-		if ok and hui and typeof(hui) == "Instance" then
-			guiParent = hui
-		end
-	end
-	if not guiParent then
-		guiParent = player:WaitForChild("PlayerGui")
-	end
-
 	self.Gui = create("ScreenGui", {
-		Name = config.GuiName or "iSPLOIT",
+		Name = guiName,
 		ResetOnSpawn = false,
 		IgnoreGuiInset = true,
 		DisplayOrder = config.DisplayOrder or 50,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Enabled = true,
-	}, guiParent)
+	}, playerGui)
 	pcall(function()
 		self.Gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	end)
@@ -296,22 +300,22 @@ function iSPLOIT.new(config)
 
 	self.TitleLabel = label(self.Header, self.Title, 24, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBlack)
 	self.TitleLabel.Name = "Title"
-	self.TitleLabel.Position = UDim2.fromOffset(48, 0)
-	self.TitleLabel.Size = UDim2.new(1, -96, 1, self.Subtitle ~= "" and -16 or 0)
+	self.TitleLabel.Position = UDim2.fromOffset(16, 0)
+	self.TitleLabel.Size = UDim2.new(1, -32, 1, self.Subtitle ~= "" and -16 or 0)
 	self.TitleLabel.TextXAlignment = Enum.TextXAlignment.Center
 
 	self.SubtitleLabel = label(self.Header, string.upper(self.Subtitle), 10,
 		Color3.fromRGB(215, 225, 235), Enum.Font.GothamMedium)
 	self.SubtitleLabel.Name = "Subtitle"
 	self.SubtitleLabel.AnchorPoint = Vector2.new(0, 1)
-	self.SubtitleLabel.Position = UDim2.new(0, 48, 1, -6)
-	self.SubtitleLabel.Size = UDim2.new(1, -96, 0, 14)
+	self.SubtitleLabel.Position = UDim2.new(0, 16, 1, -6)
+	self.SubtitleLabel.Size = UDim2.new(1, -32, 0, 14)
 	self.SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Center
 	self.SubtitleLabel.Visible = self.Subtitle ~= ""
 
 	self.DragArea = create("Frame", {
 		Name = "DragArea",
-		Size = UDim2.new(1, -52, 1, 0),
+		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Active = true,
@@ -322,25 +326,6 @@ function iSPLOIT.new(config)
 			or input.UserInputType == Enum.UserInputType.Touch then
 			self:_beginDrag(input)
 		end
-	end)
-
-	self.CloseButton = create("TextButton", {
-		Name = "Close",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(32, 32),
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.55,
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
-		Text = "X",
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		Font = Enum.Font.GothamBold,
-		TextSize = 13,
-		ZIndex = 4,
-	}, self.Header)
-	self.CloseButton.Activated:Connect(function()
-		self:SetVisible(false)
 	end)
 
 	self.SubBar = create("Frame", {
@@ -434,8 +419,8 @@ function iSPLOIT.new(config)
 		self._showButton = true
 		local button = create("TextButton", {
 			Name = "MobileToggle",
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = config.ButtonPosition or UDim2.new(0, 12, 0.5, 0),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = config.ButtonPosition or UDim2.new(1, -12, 0.5, 0),
 			Size = UDim2.fromOffset(46, 46),
 			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
 			BackgroundTransparency = 0.35,
@@ -461,7 +446,7 @@ function iSPLOIT.new(config)
 		end
 		self.MobileScale = create("UIScale", { Scale = 1 }, button)
 		button.Activated:Connect(function()
-			self:SetVisible(true)
+			self:Toggle()
 		end)
 		self.MobileButton = button
 	end
@@ -474,6 +459,14 @@ function iSPLOIT.new(config)
 	self:_updateLayout()
 	self:SetVisible(false)
 
+	if carry then
+		if carry.UserMoved then
+			self._userMoved = true
+			self._position = self:_clampPosition(carry.Position)
+		end
+		if carry.Visible then self:SetVisible(true) end
+	end
+
 	if config.AutoLoad then
 		self:LoadConfig(nil, true)
 	end
@@ -481,7 +474,7 @@ function iSPLOIT.new(config)
 	return self
 end
 
-function iSPLOIT:_getViewport()
+function ModMenu:_getViewport()
 	local size = self.Gui.AbsoluteSize
 	if size.X > 0 and size.Y > 0 then return size end
 	local camera = workspace.CurrentCamera
@@ -489,7 +482,7 @@ function iSPLOIT:_getViewport()
 	return Vector2.new(1280, 720)
 end
 
-function iSPLOIT:_clampPosition(position)
+function ModMenu:_clampPosition(position)
 	local viewport = self:_getViewport()
 	local width = self._baseWidth * self._scale
 	local height = self._height * self._scale
@@ -499,11 +492,11 @@ function iSPLOIT:_clampPosition(position)
 	)
 end
 
-function iSPLOIT:_applyPosition()
+function ModMenu:_applyPosition()
 	self.Main.Position = UDim2.fromOffset(self._position.X, self._position.Y)
 end
 
-function iSPLOIT:_updateLayout()
+function ModMenu:_updateLayout()
 	if self._destroyed then return end
 	local viewport = self:_getViewport()
 
@@ -539,7 +532,7 @@ function iSPLOIT:_updateLayout()
 	if self.Visible then self:_applyPosition() end
 end
 
-function iSPLOIT:_beginDrag(input)
+function ModMenu:_beginDrag(input)
 	if self._slideTween then self._slideTween:Cancel() end
 	self._dragging = true
 	self._dragInput = input
@@ -547,28 +540,28 @@ function iSPLOIT:_beginDrag(input)
 	self._dragOrigin = self._position
 end
 
-function iSPLOIT:_updateDrag(input)
+function ModMenu:_updateDrag(input)
 	local delta = Vector2.new(input.Position.X, input.Position.Y) - self._dragStart
 	self._userMoved = true
 	self._position = self:_clampPosition(self._dragOrigin + delta)
 	self:_applyPosition()
 end
 
-function iSPLOIT:ResetPosition()
+function ModMenu:ResetPosition()
 	self._userMoved = false
 	self:_updateLayout()
 end
 
-function iSPLOIT:_activeTab()
+function ModMenu:_activeTab()
 	return self.Tabs[self.ActiveTabIndex]
 end
 
-function iSPLOIT:_activeOption()
+function ModMenu:_activeOption()
 	local tab = self:_activeTab()
 	return tab and tab.Options[self.ActiveOptionIndex]
 end
 
-function iSPLOIT:_connectInput()
+function ModMenu:_connectInput()
 	table.insert(self._connections, UserInputService.InputBegan:Connect(function(input, processed)
 		if self._destroyed then return end
 
@@ -646,20 +639,17 @@ function iSPLOIT:_connectInput()
 	end))
 end
 
-function iSPLOIT:_toggleWithDebounce()
+function ModMenu:_toggleWithDebounce()
 	local now = os.clock()
 	if now - self._lastToggle < self._toggleDebounce then return end
 	self._lastToggle = now
 	self:SetVisible(not self.Visible)
 end
 
-function iSPLOIT:SetVisible(visible)
+function ModMenu:SetVisible(visible)
 	self.Visible = visible == true
 	self.Overlay.Visible = self.Visible
 	self.Main.Visible = self.Visible
-	if self.MobileButton then
-		self.MobileButton.Visible = not self.Visible
-	end
 
 	if not self.Visible then
 		self._dragging = false
@@ -680,11 +670,11 @@ function iSPLOIT:SetVisible(visible)
 	end
 end
 
-function iSPLOIT:Toggle()
+function ModMenu:Toggle()
 	self:SetVisible(not self.Visible)
 end
 
-function iSPLOIT:AddTab(name, icon)
+function ModMenu:AddTab(name, icon)
 	assert(type(name) == "string", "Tab name must be a string")
 	local tab = {
 		Name = name,
@@ -701,7 +691,7 @@ function iSPLOIT:AddTab(name, icon)
 	return tab
 end
 
-function iSPLOIT:_addOption(tab, option)
+function ModMenu:_addOption(tab, option)
 	tab = tab or self:_activeTab()
 	assert(tab, "Create a tab with AddTab() before adding options")
 	option.Name = option.Name or "Option"
@@ -727,20 +717,20 @@ function iSPLOIT:_addOption(tab, option)
 	return option
 end
 
-function iSPLOIT:AddToggle(name, defaultValue, callback, description, tab)
+function ModMenu:AddToggle(name, defaultValue, callback, description, tab)
 	return self:_addOption(tab, {
 		Type = "Toggle", Name = name, Value = defaultValue == true,
 		Callback = callback, Description = description,
 	})
 end
 
-function iSPLOIT:AddButton(name, callback, description, tab)
+function ModMenu:AddButton(name, callback, description, tab)
 	return self:_addOption(tab, {
 		Type = "Button", Name = name, Callback = callback, Description = description,
 	})
 end
 
-function iSPLOIT:AddList(name, values, defaultValue, callback, description, tab)
+function ModMenu:AddList(name, values, defaultValue, callback, description, tab)
 	values = values or {}
 	local selected = defaultValue
 	if selected == nil and #values > 0 then selected = values[1] end
@@ -750,7 +740,7 @@ function iSPLOIT:AddList(name, values, defaultValue, callback, description, tab)
 	})
 end
 
-function iSPLOIT:AddSlider(name, minValue, maxValue, defaultValue, step, callback, description, tab)
+function ModMenu:AddSlider(name, minValue, maxValue, defaultValue, step, callback, description, tab)
 	minValue = tonumber(minValue) or 0
 	maxValue = tonumber(maxValue) or 100
 	step = tonumber(step) or 1
@@ -762,14 +752,14 @@ function iSPLOIT:AddSlider(name, minValue, maxValue, defaultValue, step, callbac
 	})
 end
 
-function iSPLOIT:AddSeparator(name, tab)
+function ModMenu:AddSeparator(name, tab)
 	return self:_addOption(tab, {
 		Type = "Separator", Name = name or "────────",
 		Description = "",
 	})
 end
 
-function iSPLOIT:AddConfigTab(tabName, slotCount)
+function ModMenu:AddConfigTab(tabName, slotCount)
 	local tab = self:AddTab(tabName or "Config")
 
 	local slots = {}
@@ -810,7 +800,7 @@ function iSPLOIT:AddConfigTab(tabName, slotCount)
 	return tab
 end
 
-function iSPLOIT:_fireCallback(option)
+function ModMenu:_fireCallback(option)
 	if type(option.Callback) == "function" then
 		task.spawn(function()
 			local ok, err = pcall(option.Callback, option.Value, option)
@@ -819,7 +809,7 @@ function iSPLOIT:_fireCallback(option)
 	end
 end
 
-function iSPLOIT:_collectOptions()
+function ModMenu:_collectOptions()
 	local result = {}
 	for _, tab in ipairs(self.Tabs) do
 		for index, option in ipairs(tab.Options) do
@@ -831,19 +821,18 @@ function iSPLOIT:_collectOptions()
 	return result
 end
 
-function iSPLOIT:Notify(text, duration)
+function ModMenu:Notify(text, duration)
 	self._notifyToken += 1
 	local token = self._notifyToken
-	self.CategoryLabel.Text = string.upper(tostring(text or ""))
-	self.CategoryLabel.TextColor3 = self.Theme.Accent
+	self.Description.Text = tostring(text or "")
 	task.delay(duration or 2, function()
 		if not self._destroyed and self._notifyToken == token then
-			self:_updateHeader()
+			self:_updateDescription()
 		end
 	end)
 end
 
-function iSPLOIT:ExportConfig()
+function ModMenu:ExportConfig()
 	local values = {}
 	for key, option in pairs(self:_collectOptions()) do
 		local valueType = type(option.Value)
@@ -858,7 +847,7 @@ function iSPLOIT:ExportConfig()
 	return nil, tostring(encoded)
 end
 
-function iSPLOIT:ImportConfig(text)
+function ModMenu:ImportConfig(text)
 	local ok, decoded = pcall(function()
 		return HttpService:JSONDecode(text)
 	end)
@@ -885,7 +874,7 @@ function iSPLOIT:ImportConfig(text)
 	return true, applied
 end
 
-function iSPLOIT:SaveConfig(name, silent)
+function ModMenu:SaveConfig(name, silent)
 	name = name or self.ConfigName
 	local encoded, encodeError = self:ExportConfig()
 	if not encoded then
@@ -905,12 +894,12 @@ function iSPLOIT:SaveConfig(name, silent)
 		self._warnedMemory = true
 	end
 	if not silent then
-		self:Notify(self.Storage.Persistent == false and "Saved (only for this session)" or ("Saved: " .. name))
+		self:Notify(self.Storage.Persistent == false and "Saved (this session only)" or ("Saved: " .. name))
 	end
 	return true
 end
 
-function iSPLOIT:LoadConfig(name, silent)
+function ModMenu:LoadConfig(name, silent)
 	name = name or self.ConfigName
 	local ok, text = pcall(self.Storage.Load, name)
 	if not ok then
@@ -925,6 +914,7 @@ function iSPLOIT:LoadConfig(name, silent)
 
 	local imported, info = self:ImportConfig(text)
 	if not imported then
+		warn("", info)
 		if not silent then self:Notify("Save is corrupted") end
 		return false
 	end
@@ -932,7 +922,7 @@ function iSPLOIT:LoadConfig(name, silent)
 	return true
 end
 
-function iSPLOIT:DeleteConfig(name, silent)
+function ModMenu:DeleteConfig(name, silent)
 	name = name or self.ConfigName
 	local deleted = false
 	if type(self.Storage.Delete) == "function" then
@@ -945,7 +935,7 @@ function iSPLOIT:DeleteConfig(name, silent)
 	return deleted
 end
 
-function iSPLOIT:ResetConfig(silent)
+function ModMenu:ResetConfig(silent)
 	self._loaded = nil
 	for _, option in pairs(self:_collectOptions()) do
 		if option.Default ~= nil and option.Value ~= option.Default then
@@ -958,7 +948,7 @@ function iSPLOIT:ResetConfig(silent)
 	if not silent then self:Notify("Defaults restored") end
 end
 
-function iSPLOIT:_queueAutoSave()
+function ModMenu:_queueAutoSave()
 	if not self.AutoSave or self._autoSavePending or self._destroyed then return end
 	self._autoSavePending = true
 	task.delay(1, function()
@@ -969,14 +959,14 @@ function iSPLOIT:_queueAutoSave()
 	end)
 end
 
-function iSPLOIT:_clearHoverConnections()
+function ModMenu:_clearHoverConnections()
 	for _, conn in ipairs(self._hoverConnections) do
 		conn:Disconnect()
 	end
 	table.clear(self._hoverConnections)
 end
 
-function iSPLOIT:_bindHover(button, isSelected)
+function ModMenu:_bindHover(button, isSelected)
 	if isSelected then return end
 	local enter = button.MouseEnter:Connect(function()
 		if not self.Visible then return end
@@ -990,7 +980,7 @@ function iSPLOIT:_bindHover(button, isSelected)
 	table.insert(self._hoverConnections, leave)
 end
 
-function iSPLOIT:_updateHeader()
+function ModMenu:_updateHeader()
 	local tab = self:_activeTab()
 	local totalTabs = math.max(#self.Tabs, 1)
 	self.PageLabel.Text = string.format("%d / %d", self.ActiveTabIndex, totalTabs)
@@ -999,7 +989,7 @@ function iSPLOIT:_updateHeader()
 	self.TitleLabel.Text = self.Title
 end
 
-function iSPLOIT:_updateCounter()
+function ModMenu:_updateCounter()
 	local tab = self:_activeTab()
 	if not tab or #tab.Options == 0 then
 		self.CounterLabel.Text = ""
@@ -1015,7 +1005,7 @@ function iSPLOIT:_updateCounter()
 	self.CounterLabel.Text = string.format("%d / %d", current, total)
 end
 
-function iSPLOIT:_clearOptionRows()
+function ModMenu:_clearOptionRows()
 	for _, child in ipairs(self.OptionList:GetChildren()) do
 		if child:IsA("GuiObject") then child:Destroy() end
 	end
@@ -1025,7 +1015,7 @@ function iSPLOIT:_clearOptionRows()
 	self:_clearHoverConnections()
 end
 
-function iSPLOIT:_buildCheckbox(row, isOn, color)
+function ModMenu:_buildCheckbox(row, isOn, color)
 	local box = create("Frame", {
 		Name = "Checkbox",
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -1052,7 +1042,7 @@ function iSPLOIT:_buildCheckbox(row, isOn, color)
 	return box
 end
 
-function iSPLOIT:_makeArrow(parent, text, anchorX, color, height, callback)
+function ModMenu:_makeArrow(parent, text, anchorX, color, height, callback)
 	local button = create("TextButton", {
 		Name = anchorX == 0 and "Prev" or "Next",
 		AnchorPoint = Vector2.new(anchorX, 0),
@@ -1070,14 +1060,14 @@ function iSPLOIT:_makeArrow(parent, text, anchorX, color, height, callback)
 	return button
 end
 
-function iSPLOIT:_sliderValueFromX(option, hit, x)
+function ModMenu:_sliderValueFromX(option, hit, x)
 	local fraction = math.clamp((x - hit.AbsolutePosition.X) / math.max(hit.AbsoluteSize.X, 1), 0, 1)
 	local raw = option.Min + fraction * (option.Max - option.Min)
 	local stepped = option.Min + math.floor((raw - option.Min) / option.Step + 0.5) * option.Step
 	return roundToStep(math.clamp(stepped, option.Min, option.Max), option.Step)
 end
 
-function iSPLOIT:_renderOptions()
+function ModMenu:_renderOptions()
 	self:_clearOptionRows()
 	self:_updateCounter()
 	local tab = self:_activeTab()
@@ -1267,13 +1257,14 @@ function iSPLOIT:_renderOptions()
 	end
 end
 
-function iSPLOIT:_updateDescription()
+function ModMenu:_updateDescription()
 	local option = self:_activeOption()
 	self.Description.Text = option and (option.Description ~= "" and option.Description or option.Name)
 		or "Choose a category."
 end
 
-function iSPLOIT:MoveSelection(direction)
+
+function ModMenu:MoveSelection(direction)
 	local tab = self:_activeTab()
 	if not tab or #tab.Options == 0 then return end
 	local index = self.ActiveOptionIndex
@@ -1288,7 +1279,7 @@ function iSPLOIT:MoveSelection(direction)
 	self:_updateDescription()
 end
 
-function iSPLOIT:ChangeTab(direction)
+function ModMenu:ChangeTab(direction)
 	if #self.Tabs == 0 then return end
 	self._sliderDrag = nil
 	self.ActiveTabIndex = ((self.ActiveTabIndex - 1 + direction) % #self.Tabs) + 1
@@ -1308,7 +1299,7 @@ function iSPLOIT:ChangeTab(direction)
 	self:_updateDescription()
 end
 
-function iSPLOIT:_setOptionValue(option, value)
+function ModMenu:_setOptionValue(option, value)
 	option.Value = value
 	self:_fireCallback(option)
 	self:_queueAutoSave()
@@ -1316,7 +1307,7 @@ function iSPLOIT:_setOptionValue(option, value)
 	self:_updateDescription()
 end
 
-function iSPLOIT:AdjustSelection(direction)
+function ModMenu:AdjustSelection(direction)
 	local option = self:_activeOption()
 	if not option or option.Enabled == false then return end
 
@@ -1333,7 +1324,7 @@ function iSPLOIT:AdjustSelection(direction)
 	end
 end
 
-function iSPLOIT:ActivateSelection()
+function ModMenu:ActivateSelection()
 	local option = self:_activeOption()
 	if not option or option.Enabled == false then return end
 
@@ -1353,18 +1344,18 @@ function iSPLOIT:ActivateSelection()
 	end
 end
 
-function iSPLOIT:Back()
+function ModMenu:Back()
 	self:SetVisible(false)
 end
 
-function iSPLOIT:SetStatus(text, color)
+function ModMenu:SetStatus(text, color)
 	if self.CategoryLabel then
 		self.CategoryLabel.Text = tostring(text or "")
 		if color then self.CategoryLabel.TextColor3 = color end
 	end
 end
 
-function iSPLOIT:SetToggle(option, value, suppressCallback)
+function ModMenu:SetToggle(option, value, suppressCallback)
 	assert(option and option.Type == "Toggle", "SetToggle expects an option returned by AddToggle")
 	option.Value = value == true
 	if not suppressCallback then
@@ -1374,7 +1365,7 @@ function iSPLOIT:SetToggle(option, value, suppressCallback)
 	self:_renderOptions()
 end
 
-function iSPLOIT:Destroy()
+function ModMenu:Destroy()
 	if self._destroyed then return end
 	self._destroyed = true
 	for _, connection in ipairs(self._connections) do
@@ -1382,7 +1373,9 @@ function iSPLOIT:Destroy()
 	end
 	table.clear(self._connections)
 	self:_clearHoverConnections()
+	local registry = getRegistry()
+	if registry[self._guiName] == self then registry[self._guiName] = nil end
 	if self.Gui then self.Gui:Destroy() end
 end
 
-return iSPLOIT
+return ModMenu
