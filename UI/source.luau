@@ -185,7 +185,7 @@ function ModMenu.new(config)
 	assert(player, "ModMenu.new() must be called from a LocalScript")
 	local playerGui = player:WaitForChild("PlayerGui")
 
-	local guiName = config.GuiName or "GTAInteractionMenu"
+	local guiName = config.GuiName or "iSPLOIT"
 	local registry = getRegistry()
 	local previous = registry[guiName]
 	local carry = nil
@@ -492,8 +492,21 @@ function ModMenu:_clampPosition(position)
 	)
 end
 
+function ModMenu:_isCentered()
+	return not self._userMoved and not self._configPosition
+end
+
+function ModMenu:_positionProps(xShift)
+	if self:_isCentered() then
+		return Vector2.new(0.5, 0.5), UDim2.new(0.5, xShift, 0.5, 0)
+	end
+	return Vector2.new(0, 0), UDim2.fromOffset(self._position.X + xShift, self._position.Y)
+end
+
 function ModMenu:_applyPosition()
-	self.Main.Position = UDim2.fromOffset(self._position.X, self._position.Y)
+	local anchor, position = self:_positionProps(0)
+	self.Main.AnchorPoint = anchor
+	self.Main.Position = position
 end
 
 function ModMenu:_updateLayout()
@@ -517,23 +530,26 @@ function ModMenu:_updateLayout()
 		self.MobileScale.Scale = math.clamp(scale, 0.9, 1.2)
 	end
 
-	if not self._userMoved then
+	if not self._userMoved and self._configPosition then
 		local cp = self._configPosition
-		if cp then
-			self._position = Vector2.new(
-				cp.X.Scale * viewport.X + cp.X.Offset,
-				cp.Y.Scale * viewport.Y + cp.Y.Offset
-			)
-		else
-			self._position = Vector2.new(self._isTouch and 16 or 40, (viewport.Y - height * scale) / 2)
-		end
+		self._position = Vector2.new(
+			cp.X.Scale * viewport.X + cp.X.Offset,
+			cp.Y.Scale * viewport.Y + cp.Y.Offset
+		)
 	end
-	self._position = self:_clampPosition(self._position)
+	if not self:_isCentered() then
+		self._position = self:_clampPosition(self._position)
+	end
 	if self.Visible then self:_applyPosition() end
 end
 
 function ModMenu:_beginDrag(input)
 	if self._slideTween then self._slideTween:Cancel() end
+	if self:_isCentered() then
+		self._position = self.Main.AbsolutePosition - self.Overlay.AbsolutePosition
+		self._userMoved = true
+		self:_applyPosition()
+	end
 	self._dragging = true
 	self._dragInput = input
 	self._dragStart = Vector2.new(input.Position.X, input.Position.Y)
@@ -656,14 +672,15 @@ function ModMenu:SetVisible(visible)
 		self._sliderDrag = nil
 	else
 		self.Overlay.BackgroundTransparency = 1
-		self.Main.Position = UDim2.fromOffset(self._position.X - 24, self._position.Y)
+		local anchor, startPosition = self:_positionProps(-24)
+		local _, endPosition = self:_positionProps(0)
+		self.Main.AnchorPoint = anchor
+		self.Main.Position = startPosition
 		if self._dim < 1 then
 			tween(self.Overlay, { BackgroundTransparency = self._dim }, 0.15)
 		end
 		if self._slideTween then self._slideTween:Cancel() end
-		self._slideTween = tween(self.Main, {
-			Position = UDim2.fromOffset(self._position.X, self._position.Y),
-		}, 0.14)
+		self._slideTween = tween(self.Main, { Position = endPosition }, 0.14)
 		self:_renderOptions()
 		self:_updateHeader()
 		self:_updateDescription()
@@ -1262,7 +1279,6 @@ function ModMenu:_updateDescription()
 	self.Description.Text = option and (option.Description ~= "" and option.Description or option.Name)
 		or "Choose a category."
 end
-
 
 function ModMenu:MoveSelection(direction)
 	local tab = self:_activeTab()
